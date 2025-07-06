@@ -337,6 +337,11 @@ def create_comprehensive_visualization(all_results: Dict[str, Dict[str, Any]],
     plt.suptitle(f'PatchMatch Performance Analysis - {image_size[0]}x{image_size[1]} Image', 
                  fontsize=16, y=0.98)
 
+
+    plt.savefig('speed_comparison_result.png', dpi=150)
+
+    print("SUCCESS: Results saved to 'speed_comparison_result.png'")
+
     plt.show()
 
 def run_comprehensive_comparison(image_size: Tuple[int, int] = (512, 512), 

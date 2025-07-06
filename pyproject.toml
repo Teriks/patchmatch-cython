@@ -47,7 +47,6 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/Teriks/patchmatch-cython"
 Repository = "https://github.com/Teriks/patchmatch-cython"
-Documentation = "https://patchmatch-cython.readthedocs.io"
 Issues = "https://github.com/Teriks/patchmatch-cython/issues"
 
 [tool.setuptools.packages.find]
