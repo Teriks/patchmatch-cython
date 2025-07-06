@@ -10,7 +10,7 @@ readme = "README.md"
 authors = [
     {name = "Teriks", email = "Teriks999@gmail.com"},
 ]
-license = "BSD-3-Clause"
+license = {file = "LICENSE"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
