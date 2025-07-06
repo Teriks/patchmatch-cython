@@ -1,0 +1,16 @@
+# act configuration for patchmatch-cython
+# This file configures act to use appropriate Docker images and settings
+
+# Use Linux containers for all platforms (act limitation)
+--container-architecture linux/amd64
+
+# Platform mappings - using lightweight but compatible images
+--platform ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-latest
+--platform windows-latest=ghcr.io/catthehacker/ubuntu:act-latest
+--platform macos-latest=ghcr.io/catthehacker/ubuntu:act-latest
+
+# Enable verbose output for debugging
+--verbose
+
+# Don't pull images automatically (for faster startup)
+--pull=false 

@@ -1,0 +1,13 @@
+include *.py
+include README.md
+include LICENSE
+recursive-include src *.py *.pyx
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *~
+global-exclude .DS_Store
+global-exclude __pycache__
+prune build
+prune dist
+prune .git
+prune .pytest_cache 
