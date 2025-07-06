@@ -27,7 +27,7 @@ jobs:
     - name: Build wheels
       run: python -m cibuildwheel --output-dir wheelhouse
       env:
-        CIBW_ARCHS_LINUX: "auto aarch64"
+        CIBW_ARCHS_LINUX: "x86_64"
         CIBW_ARCHS_MACOS: "x86_64 arm64"
         CIBW_ARCHS_WINDOWS: auto
         CIBW_TEST_COMMAND: 'python -c "import patchmatch_cython; print(\"SUCCESS: Import successful\")"'
