@@ -65,7 +65,7 @@ def inpaint_pyramid(
 
     nnf: typing.Optional[np.ndarray] = None
 
-    for level in range(levels):
+    for level in range(levels + 1):
 
         height = height_list[-level - 1]
         width = width_list[-level - 1]
@@ -82,7 +82,7 @@ def inpaint_pyramid(
         else:
             inpainted_image = solver(iterations=iterations, randomize_nnf=False, nnf=nnf, seed=seed)
 
-        if level < levels - 1:
+        if level < levels:
             height = height_list[-level - 2]
             width = width_list[-level - 2]
             nnf = upsample(solver.nnf, height, width)
