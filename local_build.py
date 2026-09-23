@@ -77,8 +77,8 @@ def build_wheels(python_versions=None, platforms=None, clean=True):
         print(f"Building for Python versions: {python_versions}")
     else:
         # Build all supported versions (default)
-        env["CIBW_BUILD"] = "cp310-* cp311-* cp312-* cp313-*"
-        print("Building for all supported Python versions (3.10-3.13)")
+        env["CIBW_BUILD"] = "cp310-* cp311-* cp312-* cp313-* cp314-*"
+        print("Building for all supported Python versions (3.10-3.14)")
     
 
     

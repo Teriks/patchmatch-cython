@@ -104,7 +104,7 @@ pip install cibuildwheel
 Use the included `local_build.py` script to build locally:
 
 ```bash
-# Build for all supported Python versions (3.10-3.13)
+# Build for all supported Python versions (3.10-3.14)
 python local_build.py
 
 # Build for specific Python versions
