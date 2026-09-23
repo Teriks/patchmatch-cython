@@ -13,15 +13,44 @@ try:
 except ImportError:
     raise RuntimeError("Cython is required to build this package. Install with: pip install Cython")
 
+def macos_target_archs():
+    """Return the macOS architectures this compilation is targeting.
+
+    cibuildwheel cross-compiles by setting ARCHFLAGS (for example
+    ``-arch x86_64``) on an Apple Silicon runner. platform.machine() still
+    reports the host CPU in that case, so it cannot be used to choose flags.
+    """
+    archs = []
+    parts = os.environ.get("ARCHFLAGS", "").split()
+    for index, part in enumerate(parts):
+        if part == "-arch" and index + 1 < len(parts):
+            archs.append(parts[index + 1])
+    if archs:
+        return archs
+
+    machine = platform.machine().lower()
+    if machine in ("arm64", "aarch64"):
+        return ["arm64"]
+    if machine in ("x86_64", "amd64"):
+        return ["x86_64"]
+    return [machine]
+
+
 def get_compiler_args():
     """Get platform-appropriate compiler arguments"""
     if os.name == 'nt':  # Windows
         return ["/O2"]
     elif platform.system() == 'Darwin':  # macOS
-        if platform.machine() in ('arm64', 'aarch64'):  # Apple Silicon
+        archs = macos_target_archs()
+        # -mcpu=apple-m1 is valid only for arm64. cibuildwheel's x86_64 builds
+        # run on Apple Silicon runners, and passing that flag makes clang fail
+        # with "unsupported option '-mcpu='".
+        if archs == ["arm64"]:
             return ["-O3", "-mcpu=apple-m1"]
-        else:  # Intel Mac
+        # -march=native is only safe when actually compiling on Intel.
+        if archs == ["x86_64"] and platform.machine().lower() in ("x86_64", "amd64"):
             return ["-O3", "-march=native"]
+        return ["-O3"]
     else:  # Linux and other Unix-like
         return ["-O3", "-march=native"]
 
