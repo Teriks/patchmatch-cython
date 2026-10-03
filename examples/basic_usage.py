@@ -55,8 +55,8 @@ def create_test_image_and_mask():
             pt2 = (np.random.randint(w//4, 3*w//4), np.random.randint(h//4, 3*h//4))
             mask_draw.line([pt1, pt2], fill=255, width=12)
         
-        # Convert to numpy array
-        mask = np.array(mask_img).astype(np.uint8)
+        # Convert to boolean mask (PIL uses 0/255; do not keep as uint8 for indexing)
+        mask = np.array(mask_img) > 0
         
         return image_array, mask
         
@@ -73,8 +73,8 @@ def create_test_image_and_mask():
         image[50:150, 50:150] = [200.0, 50.0, 50.0]
         
         # Simple mask
-        mask = np.zeros((512, 512), dtype=np.uint8)
-        mask[200:300, 200:300] = 1
+        mask = np.zeros((512, 512), dtype=bool)
+        mask[200:300, 200:300] = True
         
         return image, mask
 
@@ -88,7 +88,7 @@ def demonstrate_basic_usage():
     
     print(f"Image shape: {image.shape}")
     print(f"Mask shape: {mask.shape}")
-    print(f"Pixels to inpaint: {np.sum(mask)}")
+    print(f"Pixels to inpaint: {np.count_nonzero(mask)}")
     
     # Run inpainting - automatically uses fastest available implementation
     print("\nRunning inpainting (auto-selects best implementation)...")

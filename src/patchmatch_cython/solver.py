@@ -26,7 +26,8 @@ class Solver(ABC):
             self,
             image: np.ndarray,
             mask: np.ndarray,
-            patch_size: int
+            patch_size: int,
+            edge_weighted: bool = False,
     ) -> None:
         """
         Initialize the solver with source image, mask, and patch size.
@@ -41,12 +42,16 @@ class Solver(ABC):
         :type mask: numpy.ndarray
         :param patch_size: Size of square patches to use for matching
         :type patch_size: int
+        :param edge_weighted: If True, match with boosted gradient channels; if False,
+                              use color-only features
+        :type edge_weighted: bool
         """
 
         self.image: np.ndarray = image
         self.mask: np.ndarray = mask
         self.patch_size: int = patch_size
         self.half_patch_size: int = patch_size // 2
+        self.edge_weighted: bool = bool(edge_weighted)
         self.height: int
         self.width: int
         self.height, self.width = image.shape[:2]
@@ -57,7 +62,9 @@ class Solver(ABC):
             iterations: int = 5,
             randomize_nnf: bool = True,
             nnf: Optional[np.ndarray] = None,
-            seed: Optional[int] = None
+            seed: Optional[int] = None,
+            em_loops: int = 1,
+            reverse_search: bool = False,
     ) -> np.ndarray:
         """
         Run the PatchMatch algorithm.
@@ -75,6 +82,10 @@ class Solver(ABC):
         :type nnf: numpy.ndarray or None
         :param seed: Random seed for this specific run, overrides instance seed if provided
         :type seed: int or None
+        :param em_loops: Outer match→vote→rematch loops (1 preserves prior behavior)
+        :type em_loops: int
+        :param reverse_search: Enable source→query completeness / reverse search
+        :type reverse_search: bool
         :return: Inpainted image as numpy array with same shape as input
         :rtype: numpy.ndarray
         """

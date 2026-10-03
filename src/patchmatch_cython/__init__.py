@@ -1,6 +1,6 @@
 import typing
 
-__version__: str = "0.1.5"
+__version__: str = "0.2.0"
 
 # Core algorithm imports (always available)
 from .python_solver import PythonSolver

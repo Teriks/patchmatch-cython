@@ -1,9 +1,9 @@
-import numpy as np
 import time
-import matplotlib.pyplot as plt
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Any, Dict, List, Tuple
 
-# Try to import both solver implementations from top level
+import matplotlib.pyplot as plt
+import numpy as np
+
 try:
     from patchmatch_cython import PythonSolver
     PYTHON_AVAILABLE = True
@@ -18,416 +18,390 @@ except ImportError:
     print("Cython solver not available")
     CYTHON_AVAILABLE = False
 
+from patchmatch_cython.imageops import opencv_available, set_use_opencv
+
+
 def create_test_image(size=(512, 512), seed: int = 42) -> np.ndarray:
     """Create a synthetic test image with various features"""
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
     h, w = size
-    
+
+    yy = np.linspace(0, 255, h, dtype=np.float32)[:, None]
+    xx = np.linspace(0, 255, w, dtype=np.float32)[None, :]
+    image = np.zeros((h, w, 3), dtype=np.float32)
+    image[..., 0] = yy
+    image[..., 1] = xx
+
     try:
         from PIL import Image, ImageDraw
-        
-        # Create image with gradient background
-        image = Image.new('RGB', (w, h))
-        pixels = image.load()
-        
-        # Add gradient background
-        for i in range(h):
-            for j in range(w):
-                pixels[j, i] = (int(255 * i / h), int(255 * j / w), 0)
-        
-        # Create drawing context
-        draw = ImageDraw.Draw(image)
-        
-        # Add some shapes
-        draw.rectangle([50, 50, 150, 150], fill=(255, 0, 0))  # Red rectangle
-        draw.ellipse([260, 60, 340, 140], fill=(0, 255, 0))   # Green circle
-        draw.ellipse([140, 270, 260, 330], fill=(0, 0, 255))  # Blue ellipse
-        
-        # Add some lines
-        for i in range(5):
-            pt1 = (np.random.randint(0, w), np.random.randint(0, h))
-            pt2 = (np.random.randint(0, w), np.random.randint(0, h))
-            color = tuple(np.random.randint(100, 255, 3).tolist())
+
+        pil = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
+        draw = ImageDraw.Draw(pil)
+        draw.rectangle([50, 50, 150, 150], fill=(255, 0, 0))
+        draw.ellipse([260, 60, 340, 140], fill=(0, 255, 0))
+        draw.ellipse([140, 270, 260, 330], fill=(0, 0, 255))
+        for _ in range(5):
+            pt1 = (int(rng.integers(0, w)), int(rng.integers(0, h)))
+            pt2 = (int(rng.integers(0, w)), int(rng.integers(0, h)))
+            color = tuple(int(v) for v in rng.integers(100, 255, size=3))
             draw.line([pt1, pt2], fill=color, width=2)
-        
-        # Convert to numpy array
-        image_array = np.array(image)
-        
-        # Add texture noise
-        noise = np.random.randint(0, 30, (h, w, 3))
-        image_array = np.clip(image_array.astype(np.int32) + noise, 0, 255).astype(np.uint8)
-        
-        return image_array
-        
+        image_array = np.asarray(pil, dtype=np.int32)
     except ImportError:
-        # Fallback to basic NumPy if Pillow not available
-        image = np.zeros((h, w, 3), dtype=np.uint8)
-        
-        # Add gradient background
-        for i in range(h):
-            image[i, :, 0] = int(255 * i / h)
-            image[:, i, 1] = int(255 * i / w)
-        
-        # Add basic shapes
-        image[50:150, 50:150] = [255, 0, 0]  # Red rectangle
-        
-        # Add circle (approximate)
+        image_array = image.astype(np.int32)
+        image_array[50:150, 50:150] = (255, 0, 0)
         y, x = np.ogrid[:h, :w]
-        circle_mask = (x - 300)**2 + (y - 100)**2 <= 40**2
-        image[circle_mask] = [0, 255, 0]
-        
-        # Add texture noise
-        noise = np.random.randint(0, 30, (h, w, 3))
-        image = np.clip(image.astype(np.int32) + noise, 0, 255).astype(np.uint8)
-        
-        return image
+        circle_mask = (x - 300) ** 2 + (y - 100) ** 2 <= 40 ** 2
+        image_array[circle_mask] = (0, 255, 0)
+
+    noise = rng.integers(0, 30, size=(h, w, 3))
+    return np.clip(image_array + noise, 0, 255).astype(np.uint8)
+
 
 def create_test_mask(image_shape, seed: int = 42) -> np.ndarray:
     """Create a test mask with multiple holes"""
     np.random.seed(seed)
     h, w = image_shape[:2]
-    
+
     try:
         from PIL import Image, ImageDraw
-        
-        # Create mask image
-        mask_img = Image.new('L', (w, h), 0)  # 'L' mode for grayscale
+
+        mask_img = Image.new('L', (w, h), 0)
         draw = ImageDraw.Draw(mask_img)
-        
-        # Add circular hole in center
         center = (w // 2, h // 2)
         radius = min(h, w) // 8
-        draw.ellipse([center[0] - radius, center[1] - radius, 
-                     center[0] + radius, center[1] + radius], fill=255)
-        
-        # Add some random strokes
+        draw.ellipse(
+            [center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius],
+            fill=255,
+        )
         for _ in range(3):
-            # Random thick line
-            pt1 = (np.random.randint(w//4, 3*w//4), np.random.randint(h//4, 3*h//4))
-            pt2 = (np.random.randint(w//4, 3*w//4), np.random.randint(h//4, 3*h//4))
+            pt1 = (np.random.randint(w // 4, 3 * w // 4), np.random.randint(h // 4, 3 * h // 4))
+            pt2 = (np.random.randint(w // 4, 3 * w // 4), np.random.randint(h // 4, 3 * h // 4))
             draw.line([pt1, pt2], fill=255, width=10)
-        
-        # Convert to numpy boolean array
-        mask = np.array(mask_img) > 0
-        
-        return mask
-        
+        return np.array(mask_img) > 0
+
     except ImportError:
-        # Fallback to NumPy if Pillow not available
         mask = np.zeros((h, w), dtype=bool)
-        
-        # Add circular hole in center
         center = (w // 2, h // 2)
         radius = min(h, w) // 8
         y, x = np.ogrid[:h, :w]
-        mask |= (x - center[0])**2 + (y - center[1])**2 <= radius**2
-        
-        # Add some random strokes (simple version)
+        mask |= (x - center[0]) ** 2 + (y - center[1]) ** 2 <= radius ** 2
         for _ in range(3):
-            y_start = np.random.randint(h//4, 3*h//4)
-            x_start = np.random.randint(w//4, 3*w//4)
-            y_end = np.random.randint(h//4, 3*h//4)
-            x_end = np.random.randint(w//4, 3*w//4)
-            
-            # Draw thick line
+            y_start = np.random.randint(h // 4, 3 * h // 4)
+            x_start = np.random.randint(w // 4, 3 * w // 4)
+            y_end = np.random.randint(h // 4, 3 * h // 4)
+            x_end = np.random.randint(w // 4, 3 * w // 4)
             steps = max(abs(x_end - x_start), abs(y_end - y_start))
             if steps > 0:
                 for step in range(steps):
                     t = step / steps
-                    y = int(y_start + t * (y_end - y_start))
-                    x = int(x_start + t * (x_end - x_start))
-                    
-                    # Make line thick (thickness=10)
+                    yy = int(y_start + t * (y_end - y_start))
+                    xx = int(x_start + t * (x_end - x_start))
                     for dy in range(-5, 6):
                         for dx in range(-5, 6):
-                            ny, nx = y + dy, x + dx
+                            ny, nx = yy + dy, xx + dx
                             if 0 <= ny < h and 0 <= nx < w:
                                 mask[ny, nx] = True
-        
         return mask
 
-def benchmark_solver(solver_class, image: np.ndarray, mask: np.ndarray, 
-                    patch_size: int = 5, iterations: int = 5, 
-                    seed: int = 42, runs: int = 3) -> Dict[str, Any]:
-    """Benchmark a solver implementation using the proper inpainting functions"""
-    
+
+def benchmark_solver(
+        solver_class,
+        image: np.ndarray,
+        mask: np.ndarray,
+        patch_size: int = 5,
+        seed: int = 42,
+        runs: int = 3,
+) -> Dict[str, Any]:
+    """Benchmark a solver through ``inpaint_pyramid``."""
+    from patchmatch_cython import inpaint_pyramid
+
     times = []
     result_image = None
-    
-    # Import the inpainting functions
-    from patchmatch_cython import inpaint_pyramid
-    
+
     for run in range(runs):
         print(f"  Run {run + 1}/{runs}...", end=" ")
-        
-        # Time the inpainting using the high-level API
         start_time = time.time()
-        
-        # Use pyramid inpainting for better quality (default approach)
         result = inpaint_pyramid(
-            image=image.copy(), 
-            mask=mask.copy(), 
-            patch_size=patch_size, 
+            image=image.copy(),
+            mask=mask.copy(),
+            patch_size=patch_size,
             solver_class=solver_class,
-            seed=seed
+            seed=seed,
         )
-        
-        end_time = time.time()
-        
-        runtime = end_time - start_time
+        runtime = time.time() - start_time
         times.append(runtime)
         print(f"{runtime:.3f}s")
-        
-        # Store result from first run for visualization
         if run == 0:
             result_image = result.copy()
-    
+
     return {
         'times': times,
-        'mean_time': np.mean(times),
-        'std_time': np.std(times),
-        'min_time': np.min(times),
-        'max_time': np.max(times),
-        'result_image': result_image
+        'mean_time': float(np.mean(times)),
+        'std_time': float(np.std(times)),
+        'min_time': float(np.min(times)),
+        'max_time': float(np.max(times)),
+        'result_image': result_image,
     }
 
-def create_comprehensive_visualization(all_results: Dict[str, Dict[str, Any]], 
-                                     image_size: Tuple[int, int]) -> None:
-    """Create comprehensive visualization of all results"""
-    
-    # Set up the figure
-    patch_sizes = list(all_results.keys())
-    solver_names = list(all_results[patch_sizes[0]].keys())
-    
-    # Create figure with subplots
-    fig = plt.figure(figsize=(20, 12))
-    gs = fig.add_gridspec(3, 6, hspace=0.3, wspace=0.3)
-    
-    # Display original image and mask (first row, first 2 columns)
+
+def create_comprehensive_visualization(
+        all_results: Dict[str, Dict[int, Dict[str, Any]]],
+        image_size: Tuple[int, int],
+) -> None:
+    """Create visualization comparing solvers and OpenCV vs NumPy backends."""
+    backends = list(all_results.keys())
+    patch_sizes = list(next(iter(all_results.values())).keys())
+    solver_names = []
+    for backend in backends:
+        for patch_size in patch_sizes:
+            for name in all_results[backend][patch_size]:
+                if name not in solver_names:
+                    solver_names.append(name)
+
+    n_result_cols = max(len(backends) * len(solver_names), 1)
+    fig = plt.figure(figsize=(4 + 3 * n_result_cols, 14))
+    gs = fig.add_gridspec(4, 2 + n_result_cols, hspace=0.35, wspace=0.35)
+
     ax_orig = fig.add_subplot(gs[0, 0])
     ax_mask = fig.add_subplot(gs[0, 1])
-    
-    # Get original image and mask from first result
-    first_patch = patch_sizes[0]
-    first_solver = solver_names[0]
-    
-    # We'll need to recreate the image for display
     image = create_test_image(image_size)
     mask = create_test_mask(image.shape)
-    
     ax_orig.imshow(image)
-    ax_orig.set_title(f'Original Image ({image_size[0]}x{image_size[1]})')
+    ax_orig.set_title(f'Original ({image_size[0]}x{image_size[1]})')
     ax_orig.axis('off')
-    
     ax_mask.imshow(mask, cmap='gray')
     ax_mask.set_title('Mask')
     ax_mask.axis('off')
-    
-    # Display results for each patch size
-    col_offset = 2
-    for i, patch_size in enumerate(patch_sizes):
-        for j, solver_name in enumerate(solver_names):
-            if solver_name in all_results[patch_size]:
-                ax = fig.add_subplot(gs[0, col_offset + i * 2 + j])
-                result_img = all_results[patch_size][solver_name]['result_image']
-                ax.imshow(result_img)
-                ax.set_title(f'{solver_name}\nPatch Size {patch_size}')
-                ax.axis('off')
-    
-    # Performance comparison chart (second row)
-    ax_perf = fig.add_subplot(gs[1, :3])
-    
-    # Collect performance data
-    x_labels = []
-    python_times = []
-    cython_times = []
-    
-    for patch_size in patch_sizes:
-        x_labels.append(f'Patch {patch_size}')
-        if 'Python' in all_results[patch_size]:
-            python_times.append(all_results[patch_size]['Python']['mean_time'])
-        else:
-            python_times.append(0)
-            
-        if 'Cython' in all_results[patch_size]:
-            cython_times.append(all_results[patch_size]['Cython']['mean_time'])
-        else:
-            cython_times.append(0)
-    
-    x_pos = np.arange(len(x_labels))
-    width = 0.35
-    
-    bars1 = ax_perf.bar(x_pos - width/2, python_times, width, label='Python', color='lightcoral')
-    bars2 = ax_perf.bar(x_pos + width/2, cython_times, width, label='Cython', color='skyblue')
-    
-    ax_perf.set_xlabel('Configuration')
-    ax_perf.set_ylabel('Time (seconds)')
-    ax_perf.set_title('Performance Comparison')
-    ax_perf.set_xticks(x_pos)
-    ax_perf.set_xticklabels(x_labels)
-    ax_perf.legend()
-    ax_perf.grid(True, alpha=0.3)
-    
-    # Add value labels on bars
-    for bar in bars1:
-        height = bar.get_height()
-        if height > 0:
-            ax_perf.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.2f}s', ha='center', va='bottom')
-    
-    for bar in bars2:
-        height = bar.get_height()
-        if height > 0:
-            ax_perf.text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.2f}s', ha='center', va='bottom')
-    
-    # Speedup analysis (second row, right side)
-    ax_speedup = fig.add_subplot(gs[1, 3:])
-    
-    speedups = []
-    for i, patch_size in enumerate(patch_sizes):
-        if ('Python' in all_results[patch_size] and 
-            'Cython' in all_results[patch_size] and 
-            all_results[patch_size]['Cython']['mean_time'] > 0):
-            speedup = all_results[patch_size]['Python']['mean_time'] / all_results[patch_size]['Cython']['mean_time']
-            speedups.append(speedup)
-        else:
-            speedups.append(0)
-    
-    bars = ax_speedup.bar(x_labels, speedups, color='lightgreen')
-    ax_speedup.set_xlabel('Configuration')
-    ax_speedup.set_ylabel('Speedup Factor')
-    ax_speedup.set_title('Cython Speedup')
-    ax_speedup.grid(True, alpha=0.3)
-    
-    # Add value labels
-    for bar in bars:
-        height = bar.get_height()
-        if height > 0:
-            ax_speedup.text(bar.get_x() + bar.get_width()/2., height,
-                           f'{height:.1f}x', ha='center', va='bottom')
-    
-    # Summary statistics (third row)
-    ax_stats = fig.add_subplot(gs[2, :])
-    ax_stats.axis('off')
-    
-    # Create summary text
-    summary_text = "Performance Summary\n" + "="*50 + "\n\n"
-    
-    for patch_size in patch_sizes:
-        summary_text += f"Patch Size {patch_size}:\n"
-        
+
+    col = 2
+    first_patch = patch_sizes[0]
+    for backend in backends:
         for solver_name in solver_names:
-            if solver_name in all_results[patch_size]:
-                stats = all_results[patch_size][solver_name]
-                summary_text += f"  {solver_name}: {stats['mean_time']:.2f}s ± {stats['std_time']:.2f}s\n"
-        
-        # Add speedup
-        if ('Python' in all_results[patch_size] and 
-            'Cython' in all_results[patch_size] and 
-            all_results[patch_size]['Cython']['mean_time'] > 0):
-            speedup = all_results[patch_size]['Python']['mean_time'] / all_results[patch_size]['Cython']['mean_time']
-            summary_text += f"  Speedup: {speedup:.1f}x\n"
-        
-        summary_text += "\n"
-    
-    ax_stats.text(0.05, 0.95, summary_text, transform=ax_stats.transAxes, 
-                  fontsize=10, verticalalignment='top', fontfamily='monospace')
-    
-    plt.suptitle(f'PatchMatch Performance Analysis - {image_size[0]}x{image_size[1]} Image', 
-                 fontsize=16, y=0.98)
+            if solver_name not in all_results[backend][first_patch]:
+                continue
+            ax = fig.add_subplot(gs[0, col])
+            ax.imshow(all_results[backend][first_patch][solver_name]['result_image'])
+            ax.set_title(f'{solver_name}\n{backend}\npatch {first_patch}')
+            ax.axis('off')
+            col += 1
 
+    # Grouped runtime bars: one group per patch size, bars for each backend×solver.
+    ax_perf = fig.add_subplot(gs[1, :])
+    series_labels = []
+    series_data = []
+    colors = []
+    palette = {
+        ('NumPy', 'Python'): '#e57373',
+        ('NumPy', 'Cython'): '#64b5f6',
+        ('OpenCV', 'Python'): '#c62828',
+        ('OpenCV', 'Cython'): '#1565c0',
+    }
+    for backend in backends:
+        for solver_name in solver_names:
+            values = []
+            present = False
+            for patch_size in patch_sizes:
+                stats = all_results[backend][patch_size].get(solver_name)
+                if stats is None:
+                    values.append(0.0)
+                else:
+                    values.append(stats['mean_time'])
+                    present = True
+            if present:
+                series_labels.append(f'{solver_name} ({backend})')
+                series_data.append(values)
+                colors.append(palette.get((backend, solver_name), '#9e9e9e'))
 
-    plt.savefig('speed_comparison_result.png', dpi=150)
+    x_pos = np.arange(len(patch_sizes))
+    width = 0.8 / max(len(series_data), 1)
+    for i, (label, values) in enumerate(zip(series_labels, series_data)):
+        offset = (i - (len(series_data) - 1) / 2) * width
+        bars = ax_perf.bar(
+            x_pos + offset, values, width, label=label, color=colors[i]
+        )
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax_perf.text(
+                    bar.get_x() + bar.get_width() / 2.0,
+                    height,
+                    f'{height:.2f}s',
+                    ha='center',
+                    va='bottom',
+                    fontsize=8,
+                )
 
+    ax_perf.set_xticks(x_pos)
+    ax_perf.set_xticklabels([f'Patch {p}' for p in patch_sizes])
+    ax_perf.set_ylabel('Time (seconds)')
+    ax_perf.set_title('Performance: solvers × imageops backend')
+    ax_perf.legend(fontsize=8)
+    ax_perf.grid(True, alpha=0.3)
+
+    # OpenCV speedup vs NumPy for each solver/patch
+    ax_speedup = fig.add_subplot(gs[2, :])
+    if 'OpenCV' in all_results and 'NumPy' in all_results:
+        speedup_labels = []
+        speedup_values = []
+        for patch_size in patch_sizes:
+            for solver_name in solver_names:
+                np_stats = all_results['NumPy'][patch_size].get(solver_name)
+                cv_stats = all_results['OpenCV'][patch_size].get(solver_name)
+                if not np_stats or not cv_stats or cv_stats['mean_time'] <= 0:
+                    continue
+                speedup_labels.append(f'{solver_name}\npatch {patch_size}')
+                speedup_values.append(np_stats['mean_time'] / cv_stats['mean_time'])
+        bars = ax_speedup.bar(speedup_labels, speedup_values, color='#81c784')
+        for bar in bars:
+            height = bar.get_height()
+            ax_speedup.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                height,
+                f'{height:.2f}x',
+                ha='center',
+                va='bottom',
+            )
+        ax_speedup.axhline(1.0, color='gray', linestyle='--', linewidth=1)
+        ax_speedup.set_ylabel('OpenCV speedup vs NumPy')
+        ax_speedup.set_title('imageops OpenCV acceleration factor')
+        ax_speedup.grid(True, alpha=0.3)
+    else:
+        ax_speedup.axis('off')
+        ax_speedup.text(
+            0.5, 0.5, 'OpenCV not installed — NumPy-only results',
+            ha='center', va='center', transform=ax_speedup.transAxes,
+        )
+
+    ax_stats = fig.add_subplot(gs[3, :])
+    ax_stats.axis('off')
+    summary = "Performance Summary\n" + "=" * 60 + "\n\n"
+    for backend in backends:
+        summary += f"[{backend} imageops]\n"
+        for patch_size in patch_sizes:
+            summary += f"  Patch {patch_size}:\n"
+            for solver_name in solver_names:
+                stats = all_results[backend][patch_size].get(solver_name)
+                if not stats:
+                    continue
+                summary += (
+                    f"    {solver_name}: "
+                    f"{stats['mean_time']:.2f}s ± {stats['std_time']:.2f}s\n"
+                )
+            py = all_results[backend][patch_size].get('Python')
+            cy = all_results[backend][patch_size].get('Cython')
+            if py and cy and cy['mean_time'] > 0:
+                summary += f"    Cython/Python: {py['mean_time'] / cy['mean_time']:.1f}x\n"
+        summary += "\n"
+    ax_stats.text(
+        0.02, 0.98, summary, transform=ax_stats.transAxes,
+        fontsize=9, va='top', fontfamily='monospace',
+    )
+
+    plt.suptitle(
+        f'PatchMatch Performance — {image_size[0]}x{image_size[1]} '
+        f'(OpenCV vs NumPy imageops)',
+        fontsize=14,
+        y=0.995,
+    )
+    plt.savefig('speed_comparison_result.png', dpi=150, bbox_inches='tight')
     print("SUCCESS: Results saved to 'speed_comparison_result.png'")
-
     plt.show()
 
-def run_comprehensive_comparison(image_size: Tuple[int, int] = (512, 512), 
-                                patch_sizes: List[int] = [5, 7],
-                                iterations: int = 5,
-                                runs: int = 3,
-                                seed: int = 42) -> None:
-    """Run comprehensive comparison across multiple patch sizes"""
-    
+
+def run_comprehensive_comparison(
+        image_size: Tuple[int, int] = (512, 512),
+        patch_sizes: List[int] = [5, 7],
+        runs: int = 3,
+        seed: int = 42,
+) -> None:
+    """Run comparison across patch sizes, solvers, and OpenCV on/off."""
     print(f"Running comprehensive comparison - {image_size[0]}x{image_size[1]} image")
     print("=" * 60)
-    
-    # Check available solvers
+
     available_solvers = []
     if PYTHON_AVAILABLE:
         available_solvers.append(('Python', PythonSolver))
     if CYTHON_AVAILABLE:
         available_solvers.append(('Cython', CythonSolver))
-    
     if not available_solvers:
         print("ERROR: No solvers available!")
         return
-    
+
+    backends = [('NumPy', False)]
+    if opencv_available():
+        backends.append(('OpenCV', True))
+        print("OpenCV available: benchmarking NumPy and OpenCV imageops paths")
+    else:
+        print("OpenCV not installed: benchmarking NumPy imageops path only")
+
     print(f"Available solvers: {[name for name, _ in available_solvers]}")
     print(f"Testing patch sizes: {patch_sizes}")
-    print(f"Iterations: {iterations}, Runs per test: {runs}")
+    print(f"Runs per test: {runs}")
     print()
-    
-    # Create test data
+
     image = create_test_image(image_size, seed)
     mask = create_test_mask(image.shape, seed)
-    
     print(f"Image shape: {image.shape}")
     print(f"Mask shape: {mask.shape}")
-    print(f"Pixels to inpaint: {np.sum(mask)}")
+    print(f"Pixels to inpaint: {np.count_nonzero(mask)}")
     print()
-    
-    # Run tests for each configuration
-    all_results = {}
-    
-    for patch_size in patch_sizes:
-        print(f"Testing patch size {patch_size}")
-        print("-" * 40)
-        
-        all_results[patch_size] = {}
-        
-        for solver_name, solver_class in available_solvers:
-            print(f"Running {solver_name} solver...")
-            
-            try:
-                results = benchmark_solver(
-                    solver_class, image, mask, 
-                    patch_size=patch_size, 
-                    iterations=iterations, 
-                    seed=seed, 
-                    runs=runs
-                )
-                all_results[patch_size][solver_name] = results
-                print(f"  Average time: {results['mean_time']:.2f}s ± {results['std_time']:.2f}s")
-                
-            except Exception as e:
-                print(f"  ERROR: {e}")
-                continue
-        
-        print()
-    
-    # Create visualization
+
+    all_results: Dict[str, Dict[int, Dict[str, Any]]] = {}
+    previous = set_use_opencv(True)
+
+    try:
+        for backend_name, use_opencv in backends:
+            enabled = set_use_opencv(use_opencv)
+            print(f"Backend: {backend_name} (HAS_OPENCV={enabled})")
+            print("=" * 40)
+            all_results[backend_name] = {}
+
+            for patch_size in patch_sizes:
+                print(f"Testing patch size {patch_size}")
+                print("-" * 40)
+                all_results[backend_name][patch_size] = {}
+
+                for solver_name, solver_class in available_solvers:
+                    print(f"Running {solver_name} solver...")
+                    try:
+                        results = benchmark_solver(
+                            solver_class,
+                            image,
+                            mask,
+                            patch_size=patch_size,
+                            seed=seed,
+                            runs=runs,
+                        )
+                        all_results[backend_name][patch_size][solver_name] = results
+                        print(
+                            f"  Average time: "
+                            f"{results['mean_time']:.2f}s ± {results['std_time']:.2f}s"
+                        )
+                    except Exception as exc:
+                        print(f"  ERROR: {exc}")
+                print()
+    finally:
+        set_use_opencv(previous)
+
     create_comprehensive_visualization(all_results, image_size)
 
+
 def main():
-    """Main function"""
     print("PatchMatch Performance Comparison")
     print("=" * 50)
-    
+
     if not PYTHON_AVAILABLE and not CYTHON_AVAILABLE:
         print("ERROR: No implementations available!")
         return
-    
-    # Run comprehensive comparison
+
+    # Two backends × two solvers × two patch sizes; keep runs modest.
     run_comprehensive_comparison(
         image_size=(512, 512),
         patch_sizes=[5, 7],
-        iterations=5,
-        runs=3,
-        seed=42
+        runs=2,
+        seed=42,
     )
 
+
 if __name__ == "__main__":
-    main() 
+    main()

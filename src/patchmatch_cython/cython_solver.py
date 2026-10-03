@@ -41,14 +41,22 @@ class CythonSolver(Solver):
             self,
             image: np.ndarray,
             mask: np.ndarray,
-            patch_size: int
+            patch_size: int,
+            edge_weighted: bool = False,
     ) -> None:
-        super().__init__(image, mask, patch_size)
+        # Normalize mask to {0,1} uint8. Plain astype(uint8) leaves {0,255} masks
+        # unchanged; boolean indexing bugs are avoided by going through != 0.
+        image_f32 = np.ascontiguousarray(image, dtype=np.float32)
+        mask_u8 = (np.asarray(mask) != 0).astype(np.uint8)
+        super().__init__(
+            image_f32, mask_u8.astype(bool), patch_size, edge_weighted=edge_weighted
+        )
 
         self._solver: typing.Any = CythonSolverImpl(
-            image.astype(np.float32),
-            mask.astype(np.uint8),
-            patch_size
+            image_f32,
+            np.ascontiguousarray(mask_u8),
+            patch_size,
+            edge_weighted=bool(edge_weighted),
         )
 
     @property
@@ -64,7 +72,9 @@ class CythonSolver(Solver):
             iterations: int = 5,
             randomize_nnf: bool = True,
             nnf: typing.Optional[np.ndarray] = None,
-            seed: typing.Optional[int] = None
+            seed: typing.Optional[int] = None,
+            em_loops: int = 1,
+            reverse_search: bool = False,
     ) -> np.ndarray:
         """
         Run the PatchMatch algorithm using Cython acceleration.
@@ -85,8 +95,23 @@ class CythonSolver(Solver):
         :type nnf: numpy.ndarray or None
         :param seed: Random seed for this specific run (overrides instance seed)
         :type seed: int or None
-        :return: Inpainted image with masked regions filled, converted to uint8
+        :param em_loops: Outer match→vote→rematch loops (1 preserves prior behavior)
+        :type em_loops: int
+        :param reverse_search: Enable reverse/completeness search after each EM loop
+        :type reverse_search: bool
+        :return: Inpainted image with masked regions filled (float32)
         :rtype: numpy.ndarray
         """
 
-        return self._solver(iterations, randomize_nnf, nnf, seed).astype(np.uint8)
+        # Keep float32 here so callers (and inpaint_*) can round/saturate once.
+        return np.asarray(
+            self._solver(
+                iterations,
+                randomize_nnf,
+                nnf,
+                seed,
+                em_loops,
+                reverse_search,
+            ),
+            dtype=np.float32,
+        )

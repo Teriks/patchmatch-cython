@@ -47,12 +47,13 @@ def get_compiler_args():
         # with "unsupported option '-mcpu='".
         if archs == ["arm64"]:
             return ["-O3", "-mcpu=apple-m1"]
-        # -march=native is only safe when actually compiling on Intel.
-        if archs == ["x86_64"] and platform.machine().lower() in ("x86_64", "amd64"):
-            return ["-O3", "-march=native"]
+        # Avoid -march=native so wheels remain portable across CPUs.
         return ["-O3"]
     else:  # Linux and other Unix-like
-        return ["-O3", "-march=native"]
+        # Portable default; set PATCHMATCH_NATIVE=1 for local native builds.
+        if os.environ.get("PATCHMATCH_NATIVE") == "1":
+            return ["-O3", "-march=native"]
+        return ["-O3"]
 
 # Build from Cython source only
 extensions = [
@@ -82,7 +83,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="patchmatch-cython",
-    version="0.1.5",
+    version="0.2.0",
     author="Teriks",
     author_email="Teriks999@gmail.com",
     description="High-performance PatchMatch implementation for image inpainting using Cython",
