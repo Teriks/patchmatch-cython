@@ -50,7 +50,7 @@ result = inpaint_pyramid(image, mask, seed=42)
 Image.fromarray(result).save("filled.jpg")
 ```
 
-A rectangle is enough when you do not have a mask file. `seed` makes the fill repeatable; omit it and each run can differ.
+A rectangle is enough when you do not have a mask file. `seed` makes the fill repeatable. Omitting it, or passing `None`, uses seed 0.
 
 ```python
 import numpy as np
@@ -114,7 +114,7 @@ result = inpaint_pyramid(image, mask, patch_size=7, em_loops=2, seed=42)
 | Parameter | Default | Description |
 |---|---|---|
 | `patch_size` | `5` | Odd positive int; square patch side for matching and voting. |
-| `seed` | `None` | RNG seed. `None` leaves the default solver unseeded. |
+| `seed` | `None` | RNG seed. `None` is 0. The same seed repeats the fill. |
 | `solver_class` | `None` | `None` uses `CythonSolver` when the extension is available, otherwise `PythonSolver`. |
 | `em_loops` | `1` | Outer match→paint→rematch loops. On pyramids, applied at coarse levels only (finest stays `1`). |
 | `edge_weighted` | `False` | `False` = color-only matching. `True` = color + boosted gradient channels. Hole-touching gradients are suppressed so zeroed holes do not create fake edges. |
@@ -133,7 +133,7 @@ Masks may be `bool`, `{0,1}`, or `{0,255}`. The library does not dilate or erode
 
 In this mode `patch_size` is a **radius**: each patch spans `2 * patch_size + 1` pixels. Any integer from 1 up is valid, including even values. A radius of 3 is a 7×7 patch. `inpaint_philippeau` defaults to radius 15. `inpaint_pyramid` and `inpaint_single` still default `patch_size` to 5, and that 5 is a radius here.
 
-Pass `seed` for a repeatable fill. If it is omitted, a 32-bit seed is drawn for that run.
+Pass `seed` for a repeatable fill. Omitting it, or passing `None`, uses seed 0.
 
 `inpaint_philippeau` requires an HxWx3 `uint8` image. `inpaint_pyramid` and `inpaint_single` round other numeric images into `uint8` and clip them to 0–255 before filling. The same `uint8` image, mask, radius, and seed produce the same fill from either call.
 

@@ -137,6 +137,14 @@ class TestInpaintPyramid:
         b = inpaint_pyramid(image, mask, seed=5)
         assert np.array_equal(a, b)
 
+    def test_omitted_seed_matches_zero(self, api_case):
+        image, mask = api_case
+        omitted = inpaint_pyramid(image, mask)
+        explicit_none = inpaint_pyramid(image, mask, seed=None)
+        zero = inpaint_pyramid(image, mask, seed=0)
+        assert np.array_equal(omitted, zero)
+        assert np.array_equal(explicit_none, zero)
+
     def test_small_image_falls_back(self):
         image = np.random.default_rng(0).random((20, 20, 3), dtype=np.float32) * 255
         mask = np.zeros((20, 20), dtype=bool)

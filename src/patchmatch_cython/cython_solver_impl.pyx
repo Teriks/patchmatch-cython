@@ -615,8 +615,9 @@ cdef class CythonSolverImpl:
         if em_loops < 1:
             raise ValueError("em_loops must be >= 1")
 
-        if seed is not None:
-            self._seed_rng(<unsigned int>int(seed))
+        if seed is None:
+            seed = 0
+        self._seed_rng(<unsigned int>int(seed))
 
         self._usage_penalty = 24.0 if reverse_search else 8.0
 

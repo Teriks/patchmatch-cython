@@ -40,7 +40,6 @@ from libc.stdlib cimport abs
 from libcpp.random cimport mt19937
 
 import operator
-import secrets
 
 import numpy as np
 cimport numpy as np
@@ -1507,7 +1506,7 @@ def inpaint_philippeau(
     *,
     global_mask=None,
     patch_size=15,
-    seed=None,
+    seed=0,
     ijmap=None,
     guide_weight=0.25,
 ):
@@ -1520,11 +1519,11 @@ def inpaint_philippeau(
     channels are read) and ``guide_weight`` is its weight.
 
     Only hole pixels change. A given ``seed`` is deterministic (taken modulo
-    ``2**32``). If ``seed`` is omitted, a new 32-bit seed is drawn for the run.
+    ``2**32``). ``None`` is seed 0.
     """
     patch_size = _check_int("patch_size", patch_size, 1, _MAX_PATCH_SIZE)
     if seed is None:
-        seed = secrets.randbits(32)
+        seed = 0
     seed = operator.index(seed) % 2**32
     image_u8 = _canon_image(image)
     mask_u8 = _default_mask(image_u8) if mask is None else _canon_mask(mask, "mask")

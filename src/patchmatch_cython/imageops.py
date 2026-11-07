@@ -528,7 +528,7 @@ def sanitize_nnf(
         return nnf
 
     if rng is None:
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(0)
 
     n_invalid = int(np.count_nonzero(invalid))
     choices = rng.integers(0, valid_y.size, size=n_invalid)

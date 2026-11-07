@@ -136,17 +136,18 @@ def test_rejects_bad_patch_size_and_algorithm_name():
         inpaint_pyramid(image, mask, algorithm="other")
 
 
-def test_omitted_seed_is_drawn():
+def test_omitted_seed_is_zero():
     rng = np.random.default_rng(0)
     image = rng.integers(0, 256, size=(32, 32, 3), dtype=np.uint8)
     mask = np.zeros((32, 32), dtype=np.uint8)
     mask[8:24, 8:24] = 255
-    a = inpaint_philippeau(image, mask, patch_size=2)
-    b = inpaint_philippeau(image, mask, patch_size=2)
+    omitted = inpaint_philippeau(image, mask, patch_size=2)
+    explicit_none = inpaint_philippeau(image, mask, patch_size=2, seed=None)
+    zero = inpaint_philippeau(image, mask, patch_size=2, seed=0)
     via_flag = inpaint_pyramid(image, mask, patch_size=2, algorithm="philippeau")
-    assert a.shape == image.shape
-    assert not np.array_equal(a, b)
-    assert via_flag.shape == image.shape
+    assert np.array_equal(omitted, zero)
+    assert np.array_equal(explicit_none, zero)
+    assert np.array_equal(via_flag, zero)
 
 
 def test_regularity_is_deterministic_and_keeps_global_mask():

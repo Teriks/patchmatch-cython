@@ -106,7 +106,7 @@ class PythonSolver(Solver):
         self._nnf: np.ndarray | None = None
         self._nn_dist: np.ndarray | None = None
         self._usage: np.ndarray | None = None
-        self._rng = np.random.default_rng()
+        self._rng = np.random.default_rng(0)
         self.mask = mask_bool
         self._masked_coords: np.ndarray = np.array(np.where(self.mask)).T
         self._query_mask: np.ndarray = build_query_patch_centers(
@@ -393,8 +393,7 @@ class PythonSolver(Solver):
         if em_loops < 1:
             raise ValueError("em_loops must be >= 1")
 
-        if seed is not None:
-            self._rng = np.random.default_rng(seed)
+        self._rng = np.random.default_rng(0 if seed is None else seed)
 
         self._usage_penalty = (
             _REVERSE_USAGE_PENALTY if reverse_search else _DEFAULT_USAGE_PENALTY

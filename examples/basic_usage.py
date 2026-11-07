@@ -182,15 +182,14 @@ def demonstrate_seed_functionality():
         print("INFO: Results differ slightly due to different RNG implementations")
         print("This is expected when comparing Python vs Cython solvers.")
     
-    # Show difference between seeded and unseeded runs
-    print("\nComparing seeded vs unseeded runs...")
+    print("\nComparing seed 42 with the default seed 0...")
     result_seeded = inpaint_pyramid(image, mask, seed=42)
-    result_unseeded = inpaint_pyramid(image, mask)  # No seed
+    result_default = inpaint_pyramid(image, mask)
     
-    differences = np.sum(result_seeded != result_unseeded)
-    print(f"Pixel differences between seeded and unseeded: {differences}")
+    differences = np.sum(result_seeded != result_default)
+    print(f"Pixel differences between seed 42 and seed 0: {differences}")
     
-    return result_seeded, result_unseeded
+    return result_seeded, result_default
 
 def visualize_results(image, mask, result):
     """Create visualization of the results"""

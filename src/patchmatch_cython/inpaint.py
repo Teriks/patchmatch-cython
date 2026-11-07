@@ -170,7 +170,7 @@ def _hole_refine_pass(
             nnf,
             build_query_patch_centers(mask_bool, half_patch),
             build_valid_patch_centers(mask_bool, half_patch),
-            rng=np.random.default_rng(seed) if seed is not None else None,
+            rng=np.random.default_rng(0 if seed is None else seed),
         )
         return solver(
             iterations=hole_refine,
@@ -220,8 +220,7 @@ def inpaint_pyramid(
     :param patch_size: Size of square patches to use for matching. With
                        ``algorithm="philippeau"`` this is a patch radius.
     :type patch_size: int
-    :param seed: Random seed for reproducible results. With
-                 ``algorithm="philippeau"``, omitting it draws a 32-bit seed.
+    :param seed: Random seed for reproducible results. ``None`` is 0.
     :type seed: int or None
     :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
     :type algorithm: str
@@ -357,7 +356,7 @@ def inpaint_pyramid(
             half_patch = patch_size // 2
             valid_centers = build_valid_patch_centers(next_mask, half_patch)
             query_centers = build_query_patch_centers(next_mask, half_patch)
-            rng = np.random.default_rng(seed) if seed is not None else None
+            rng = np.random.default_rng(0 if seed is None else seed)
             nnf = sanitize_nnf(
                 upsample(solver.nnf, next_height, next_width),
                 query_centers,
@@ -411,8 +410,7 @@ def inpaint_single(
     :param patch_size: Size of square patches to use for matching. With
                        ``algorithm="philippeau"`` this is a patch radius.
     :type patch_size: int
-    :param seed: Random seed for reproducible results. With
-                 ``algorithm="philippeau"``, omitting it draws a 32-bit seed.
+    :param seed: Random seed for reproducible results. ``None`` is 0.
     :type seed: int or None
     :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
     :type algorithm: str
