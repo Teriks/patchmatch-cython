@@ -62,7 +62,7 @@ cdef double SIM[65536]
 cdef bint SIM_OK = 0
 
 
-cdef inline int clampi(int v, int lo, int hi) nogil noexcept:
+cdef inline int clampi(int v, int lo, int hi) noexcept nogil:
     if v < lo:
         return lo
     if v > hi:
@@ -70,7 +70,7 @@ cdef inline int clampi(int v, int lo, int hi) nogil noexcept:
     return v
 
 
-cdef inline double clampd(double v, double lo, double hi) nogil noexcept:
+cdef inline double clampd(double v, double lo, double hi) noexcept nogil:
     if v < lo:
         return lo
     if v > hi:
@@ -78,7 +78,7 @@ cdef inline double clampd(double v, double lo, double hi) nogil noexcept:
     return v
 
 
-cdef inline int clip_i(long long value, int limit) nogil noexcept:
+cdef inline int clip_i(long long value, int limit) noexcept nogil:
     if value < 0:
         return 0
     if value > limit:
@@ -86,7 +86,7 @@ cdef inline int clip_i(long long value, int limit) nogil noexcept:
     return <int>value
 
 
-cdef inline unsigned char sat_u8(double value) nogil noexcept:
+cdef inline unsigned char sat_u8(double value) noexcept nogil:
     value = nearbyint(value)
     if value < 0:
         return 0
@@ -95,7 +95,7 @@ cdef inline unsigned char sat_u8(double value) nogil noexcept:
     return <unsigned char>value
 
 
-cdef inline int random_int(int n) nogil noexcept:
+cdef inline int random_int(int n) noexcept nogil:
     return <int>(RNG() % <unsigned int>n)
 
 
@@ -143,16 +143,16 @@ cdef class Image:
         self.h = color.shape[0]
         self.w = color.shape[1]
 
-    cdef bint is_masked(self, int y, int x) nogil noexcept:
+    cdef bint is_masked(self, int y, int x) noexcept nogil:
         return self.mask[y, x] != 0
 
-    cdef bint is_global(self, int y, int x) nogil noexcept:
+    cdef bint is_global(self, int y, int x) noexcept nogil:
         return self.has_global and self.global_mask[y, x] != 0
 
-    cdef bint is_known(self, int y, int x) nogil noexcept:
+    cdef bint is_known(self, int y, int x) noexcept nogil:
         return (not self.is_masked(y, x)) and (not self.is_global(y, x))
 
-    cdef bint is_hole(self, int y, int x) nogil noexcept:
+    cdef bint is_hole(self, int y, int x) noexcept nogil:
         return self.is_masked(y, x) and (not self.is_global(y, x))
 
     cdef void clear_mask(self):
@@ -190,7 +190,7 @@ cdef class Image:
                 )
         self.holes_ok = True
 
-    cdef bint contains_mask(self, int y, int x, int patch) nogil noexcept:
+    cdef bint contains_mask(self, int y, int x, int patch) noexcept nogil:
         cdef int top, bottom, left, right
         top = clip_i(<long long>y - patch, self.h)
         bottom = clip_i(<long long>y + patch + 1, self.h)
@@ -299,7 +299,7 @@ cdef Image initial_image(unsigned char[:, :, ::1] image, unsigned char[:, ::1] m
 
 cdef inline int pixel_cost(
     unsigned char *srow, unsigned char *trow, int sw, int tw, int xs, int xt, bint textured,
-) nogil noexcept:
+) noexcept nogil:
     cdef unsigned char *sp
     cdef unsigned char *tp
     cdef int d, ssd, gap
@@ -337,7 +337,7 @@ cdef inline int pixel_cost(
 cdef inline long long row_sum(
     unsigned char *sf, unsigned char *tf, int sh, int sw, int th, int tw,
     int sy, int sx, int ty, int tx, int patch, bint textured,
-) nogil noexcept:
+) noexcept nogil:
     cdef int dx
     cdef long long total = 0
     cdef unsigned char *srow
@@ -354,7 +354,7 @@ cdef inline long long row_sum(
 cdef inline long long col_sum(
     unsigned char *sf, unsigned char *tf, int sh, int sw, int th, int tw,
     int sy, int sx, int ty, int tx, int patch, bint textured,
-) nogil noexcept:
+) noexcept nogil:
     cdef int dy, ys, yt
     cdef long long total = 0
     for dy in range(-patch, patch + 1):
@@ -367,7 +367,7 @@ cdef inline long long col_sum(
     return total
 
 
-cdef long long patch_sum(Image source, Image target, int sy, int sx, int ty, int tx, int patch, int bound) nogil noexcept:
+cdef long long patch_sum(Image source, Image target, int sy, int sx, int ty, int tx, int patch, int bound) noexcept nogil:
     cdef long long total = 0
     cdef int dy
     cdef double side = 2.0 * patch + 1.0
@@ -386,7 +386,7 @@ cdef long long patch_sum(Image source, Image target, int sy, int sx, int ty, int
     return total
 
 
-cdef int scale_sum(long long total, int patch) nogil noexcept:
+cdef int scale_sum(long long total, int patch) noexcept nogil:
     cdef long long side = 2 * patch + 1
     cdef int res = <int>(DISTANCE_SCALE * (<double>total / SSD_SCALE) / <double>(side * side))
     if res < 0 or res > DISTANCE_SCALE:
@@ -394,7 +394,7 @@ cdef int scale_sum(long long total, int patch) nogil noexcept:
     return res
 
 
-cdef int regular_distance(Field field, int sy, int sx, int ty, int tx) nogil noexcept:
+cdef int regular_distance(Field field, int sy, int sx, int ty, int tx) noexcept nogil:
     cdef int my, mx, qy, qx
     cdef float di, dj
     cdef double score1, score2, score
@@ -445,17 +445,17 @@ cdef class Field:
             self.sum_owner = np.full((self.source.h * self.source.w,), -1, dtype=np.int64)
             self.sums = self.sum_owner
 
-    cdef int at(self, int y, int x, int c) nogil noexcept:
+    cdef int at(self, int y, int x, int c) noexcept nogil:
         return self.links[y, x, c]
 
-    cdef void set_link(self, int y, int x, int ty, int tx, int distance, long long total) nogil noexcept:
+    cdef void set_link(self, int y, int x, int ty, int tx, int distance, long long total) noexcept nogil:
         self.links[y, x, 0] = ty
         self.links[y, x, 1] = tx
         self.links[y, x, 2] = distance
         if self.use_sums:
             self.sums[y * self.source.w + x] = total
 
-    cdef void measure_into(self, int y, int x, int ty, int tx, int bound, int *distance, long long *total) nogil noexcept:
+    cdef void measure_into(self, int y, int x, int ty, int tx, int bound, int *distance, long long *total) noexcept nogil:
         cdef long long psum
         if self.regular:
             distance[0] = regular_distance(self, y, x, ty, tx)
@@ -469,7 +469,7 @@ cdef class Field:
             distance[0] = scale_sum(psum, self.patch)
             total[0] = psum
 
-    cdef void link_if_closer(self, int y, int x, int ty, int tx) nogil noexcept:
+    cdef void link_if_closer(self, int y, int x, int ty, int tx) noexcept nogil:
         cdef int distance
         cdef long long total
         cdef int current
@@ -480,10 +480,10 @@ cdef class Field:
         if distance < current:
             self.set_link(y, x, ty, tx, distance, total)
 
-    cdef void set_identity(self, int y, int x) nogil noexcept:
+    cdef void set_identity(self, int y, int x) noexcept nogil:
         self.set_link(y, x, y, x, 0, -1)
 
-    cdef void update_distance(self, int y, int x) nogil noexcept:
+    cdef void update_distance(self, int y, int x) noexcept nogil:
         cdef int distance
         cdef long long total
         cdef int ty = self.links[y, x, 0]
@@ -497,7 +497,7 @@ cdef class Field:
         self.source.compute_features()
         self.target.compute_features()
 
-    cdef void randomize_link(self, int y, int x) nogil noexcept:
+    cdef void randomize_link(self, int y, int x) noexcept nogil:
         cdef int t, ty = 0, tx = 0, distance
         cdef long long total
         distance = DISTANCE_SCALE
@@ -513,7 +513,7 @@ cdef class Field:
                 break
         self.set_link(y, x, ty, tx, distance, total)
 
-    cdef void randomize_field(self, bint reset) nogil noexcept:
+    cdef void randomize_field(self, bint reset) noexcept nogil:
         cdef int y, x
         for y in range(self.source.h):
             for x in range(self.source.w):
@@ -523,7 +523,7 @@ cdef class Field:
                     continue
                 self.randomize_link(y, x)
 
-    cdef void propagate(self, int y, int x, int dy, int dx) nogil noexcept:
+    cdef void propagate(self, int y, int x, int dy, int dx) noexcept nogil:
         cdef int ny = y - dy
         cdef int nx = x - dx
         cdef int ty = self.links[ny, nx, 0] + dy
@@ -571,7 +571,7 @@ cdef class Field:
         if distance < self.links[y, x, 2]:
             self.set_link(y, x, ty, tx, distance, total)
 
-    cdef void random_search(self, int y, int x) nogil noexcept:
+    cdef void random_search(self, int y, int x) noexcept nogil:
         cdef int radius, yc, xc, top, left, height, width, yp, xp
         height = self.target.h
         width = self.target.w
@@ -588,7 +588,7 @@ cdef class Field:
                 self.link_if_closer(y, x, yp, xp)
             radius //= 2
 
-    cdef void init_from(self, Field other) nogil noexcept:
+    cdef void init_from(self, Field other) noexcept nogil:
         cdef int y, x, ilow, jlow, ty, tx, distance
         cdef long long total
         cdef double fi = <double>self.source.h / other.source.h
@@ -613,7 +613,7 @@ cdef class Field:
                     self.random_search(y, x)
         self.randomize_field(False)
 
-    cdef void minimize_link(self, int y, int x, int direction) nogil noexcept:
+    cdef void minimize_link(self, int y, int x, int direction) noexcept nogil:
         cdef int height = self.source.h
         cdef int width = self.source.w
         if self.source.is_global(y, x) or self.links[y, x, 2] <= 0:
@@ -624,7 +624,7 @@ cdef class Field:
             self.propagate(y, x, 0, direction)
         self.random_search(y, x)
 
-    cdef void minimize(self, int passes) nogil noexcept:
+    cdef void minimize(self, int passes) noexcept nogil:
         cdef int y, x, n
         for n in range(passes):
             for y in range(self.source.h):
@@ -634,7 +634,7 @@ cdef class Field:
                 for x in range(self.source.w - 1, -1, -1):
                     self.minimize_link(y, x, -1)
 
-    cdef void clear_sums(self) nogil noexcept:
+    cdef void clear_sums(self) noexcept nogil:
         cdef int i
         if self.use_sums:
             for i in range(self.source.h * self.source.w):
@@ -900,7 +900,7 @@ cdef object to_bytes(object values_o):
     return out_o
 
 
-cdef void mean_window(Image image, unsigned char[:, :, ::1] color, int cy, int cx, int radius, bint known, double *out) nogil noexcept:
+cdef void mean_window(Image image, unsigned char[:, :, ::1] color, int cy, int cx, int radius, bint known, double *out) noexcept nogil:
     cdef int y, x, y0, y1, x0, x1, count = 0, c
     cdef double s0 = 0, s1 = 0, s2 = 0
     y0 = cy - radius if cy > radius else 0
@@ -1058,7 +1058,7 @@ cdef object low_pass(Image image):
 
 
 cdef bint rect_has_mask(long long[:, ::1] sums, int height, int width,
-                        long long y0, long long x0, long long y1, long long x1) nogil noexcept:
+                        long long y0, long long x0, long long y1, long long x1) noexcept nogil:
     cdef int top = clip_i(y0, height)
     cdef int bottom = clip_i(y1 + 1, height)
     cdef int left = clip_i(x0, width)
@@ -1066,14 +1066,14 @@ cdef bint rect_has_mask(long long[:, ::1] sums, int height, int width,
     return sums[bottom, right] - sums[top, right] - sums[bottom, left] + sums[top, left] > 0
 
 
-cdef inline bint masked_at(unsigned char *mask, unsigned char *gmask, int w, int y, int x) nogil noexcept:
+cdef inline bint masked_at(unsigned char *mask, unsigned char *gmask, int w, int y, int x) noexcept nogil:
     cdef int i = y * w + x
     if mask[i]:
         return True
     return gmask != NULL and gmask[i] != 0
 
 
-cdef void color_shift(Field field, int i, int j, int yp, int xp, int patch, bint source2target, double *shift) nogil noexcept:
+cdef void color_shift(Field field, int i, int j, int yp, int xp, int patch, bint source2target, double *shift) noexcept nogil:
     cdef int di, dj, ys, xs, yt, xt, count = 0, si, ti
     cdef double s0 = 0, s1 = 0, s2 = 0
     cdef double sign
@@ -1121,7 +1121,7 @@ cdef inline void vote_copy(
     int sh, int sw, double *vote, int vh, int vw, int channels,
     int ys, int xs, int yt, int xt, double weight, double best_weight,
     double s0, double s1, double s2, bint best_only, bint split,
-) nogil noexcept:
+) noexcept nogil:
     cdef int pix, base
     cdef double *vp
     cdef unsigned char *cp
@@ -1304,7 +1304,7 @@ cdef object voted_texture(Image source, double[:, :, ::1] vote):
     return tex
 
 
-cdef int nnf_iters(int level) nogil noexcept:
+cdef int nnf_iters(int level) noexcept nogil:
     cdef int n = 1 + level
     return 7 if n > 7 else n
 
