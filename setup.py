@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2025, Teriks
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 from setuptools import setup, Extension, find_packages
 import numpy as np
 import os
@@ -39,21 +68,21 @@ def macos_target_archs():
 def get_compiler_args():
     """Get platform-appropriate compiler arguments"""
     if os.name == 'nt':  # Windows
-        return ["/O2"]
+        return ["/O2", "/std:c++17", "/EHsc"]
     elif platform.system() == 'Darwin':  # macOS
         archs = macos_target_archs()
         # -mcpu=apple-m1 is valid only for arm64. cibuildwheel's x86_64 builds
         # run on Apple Silicon runners, and passing that flag makes clang fail
         # with "unsupported option '-mcpu='".
         if archs == ["arm64"]:
-            return ["-O3", "-mcpu=apple-m1"]
+            return ["-O3", "-std=c++17", "-mcpu=apple-m1"]
         # Avoid -march=native so wheels remain portable across CPUs.
-        return ["-O3"]
+        return ["-O3", "-std=c++17"]
     else:  # Linux and other Unix-like
         # Portable default; set PATCHMATCH_NATIVE=1 for local native builds.
         if os.environ.get("PATCHMATCH_NATIVE") == "1":
-            return ["-O3", "-march=native"]
-        return ["-O3"]
+            return ["-O3", "-std=c++17", "-march=native"]
+        return ["-O3", "-std=c++17"]
 
 # Build from Cython source only
 extensions = [
@@ -63,7 +92,14 @@ extensions = [
         include_dirs=[np.get_include()],
         language="c++",
         extra_compile_args=get_compiler_args(),
-    )
+    ),
+    Extension(
+        "patchmatch_cython.philippeau",
+        [os.path.join("src", "patchmatch_cython", "philippeau.pyx")],
+        include_dirs=[np.get_include()],
+        language="c++",
+        extra_compile_args=get_compiler_args(),
+    ),
 ]
 
 ext_modules = cythonize(
@@ -83,7 +119,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="patchmatch-cython",
-    version="0.2.1",
+    version="1.0.0",
     author="Teriks",
     author_email="Teriks999@gmail.com",
     description="High-performance PatchMatch implementation for image inpainting using Cython",
@@ -94,7 +130,7 @@ setup(
     package_dir={"": "src"},
     ext_modules=ext_modules,
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: Developers",
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3",

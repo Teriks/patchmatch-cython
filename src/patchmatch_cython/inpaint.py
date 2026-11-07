@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+#
+# Copyright (c) 2025, Teriks
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this
+#    list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 import typing
 
 import numpy as np
@@ -14,7 +43,31 @@ from .imageops import (
     to_uint8_image,
     upsample,
 )
+from .exceptions import UnsupportedOption
 from .solver import Solver
+
+
+def _inpaint_philippeau(
+        image: np.ndarray,
+        mask: np.ndarray,
+        patch_size: int,
+        seed: typing.Optional[int],
+) -> np.ndarray:
+    """Philippeau entry used by the public inpaint functions."""
+    from .philippeau import inpaint_philippeau
+
+    image_arr = np.asarray(image)
+    if image_arr.dtype != np.uint8:
+        image_arr = to_uint8_image(image_arr)
+    mask_arr = np.asarray(mask)
+    if mask_arr.dtype != np.uint8 and mask_arr.dtype != np.bool_:
+        mask_arr = (mask_arr != 0).astype(np.uint8)
+    return inpaint_philippeau(
+        image_arr,
+        mask_arr,
+        patch_size=patch_size,
+        seed=seed,
+    )
 
 
 def _default_solver_class() -> typing.Type[Solver]:
@@ -24,6 +77,37 @@ def _default_solver_class() -> typing.Type[Solver]:
     except ImportError:
         from .python_solver import PythonSolver
         return PythonSolver
+
+
+# Keyword-only options for algorithm="patchmatch". Philippeau rejects any of them.
+_PYRAMID_OPTIONS = {
+    "solver_class": None,
+    "em_loops": 1,
+    "edge_weighted": False,
+    "reverse_search": False,
+    "poisson_blend": True,
+    "hole_refine": 0,
+    "mask_feather": 0.0,
+}
+_SINGLE_OPTIONS = {"iterations": 5, **_PYRAMID_OPTIONS}
+
+
+def _reject_philippeau_keywords(options: typing.Mapping[str, typing.Any]) -> None:
+    if not options:
+        return
+    raise UnsupportedOption("philippeau", list(options))
+
+
+def _patchmatch_options(
+        options: typing.Mapping[str, typing.Any],
+        defaults: typing.Mapping[str, typing.Any],
+) -> typing.Dict[str, typing.Any]:
+    unknown = [name for name in options if name not in defaults]
+    if unknown:
+        raise TypeError("unexpected keyword argument(s): " + ", ".join(unknown))
+    values = dict(defaults)
+    values.update(options)
+    return values
 
 
 def _validate_quality_options(
@@ -111,61 +195,82 @@ def inpaint_pyramid(
         image: np.ndarray,
         mask: np.ndarray,
         patch_size: int = 5,
-        solver_class: typing.Optional[typing.Type[Solver]] = None,
         seed: typing.Optional[int] = None,
-        em_loops: int = 1,
-        edge_weighted: bool = False,
-        reverse_search: bool = False,
-        poisson_blend: bool = True,
-        hole_refine: int = 0,
-        mask_feather: float = 0.0,
+        algorithm: str = "patchmatch",
+        **options,
 ) -> np.ndarray:
     """
     Perform image inpainting using a multi-scale pyramid approach.
-    
+
     This function implements a coarse-to-fine pyramid-based inpainting strategy
     that progressively refines the inpainting result across multiple resolution levels.
     The approach starts with a heavily downsampled version of the image and gradually
     works up to the full resolution, using the result from each level to initialize
     the next level.
-    
+
     The pyramid approach significantly improves both the quality and speed of
     inpainting for large images by providing better initial estimates and reducing
     the search space at each level.
-    
+
     :param image: Input image array with shape (H, W, C)
     :type image: numpy.ndarray
     :param mask: Binary mask indicating areas to inpaint with shape (H, W).
                  Accepts bool, ``{0,1}``, or ``{0,255}`` masks.
     :type mask: numpy.ndarray
-    :param patch_size: Size of square patches to use for matching
+    :param patch_size: Size of square patches to use for matching. With
+                       ``algorithm="philippeau"`` this is a patch radius.
     :type patch_size: int
-    :param solver_class: PatchMatch solver class to use. If None, defaults to
-                        :class:`CythonSolver` with fallback to :class:`PythonSolver`
-    :type solver_class: type or None
-    :param seed: Random seed for reproducible results
+    :param seed: Random seed for reproducible results. With
+                 ``algorithm="philippeau"``, omitting it draws a 32-bit seed.
     :type seed: int or None
-    :param em_loops: Outer match→vote→rematch loops at coarse pyramid levels
-                     (finest level always uses 1). Default ``1`` keeps prior behavior.
-    :type em_loops: int
-    :param edge_weighted: Emphasize edge/structure channels in patch distance
-    :type edge_weighted: bool
-    :param reverse_search: Enable reverse/completeness search after each EM loop
-    :type reverse_search: bool
-    :param poisson_blend: Soften hole seams with a harmonic/guide cross-fade
-                          (default band 8px). Ignored when ``mask_feather > 0``,
-                          which supplies its own seam width.
-    :type poisson_blend: bool
-    :param hole_refine: Extra full-resolution PatchMatch iterations after the
-                        pyramid (0 disables). Operates only via hole painting.
-    :type hole_refine: int
-    :param mask_feather: Soft compose width in pixels from the hole boundary
-                         (0 = hard paste / optional poisson only). Does not
-                         alter the mask used for matching.
-    :type mask_feather: float
+    :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
+    :type algorithm: str
+    :param options: Keyword-only options for ``algorithm="patchmatch"``.
+                    Passing any of them with ``algorithm="philippeau"`` raises
+                    :class:`UnsupportedOption`. Unknown names raise ``TypeError``.
+
+                    ``solver_class`` (default ``None``): solver class. ``None``
+                    uses :class:`CythonSolver`, or :class:`PythonSolver` when
+                    the Cython extension is unavailable.
+
+                    ``em_loops`` (default ``1``): outer match, vote, rematch
+                    loops at coarse pyramid levels. The finest level stays at 1.
+
+                    ``edge_weighted`` (default ``False``): ``False`` matches
+                    color only. ``True`` adds boosted gradient channels.
+                    Gradients that touch the hole are suppressed.
+
+                    ``reverse_search`` (default ``False``): after each loop,
+                    try underused sources near the hole.
+
+                    ``poisson_blend`` (default ``True``): harmonic seam blend,
+                    about 8 pixels. Skipped when ``mask_feather`` is positive.
+
+                    ``hole_refine`` (default ``0``): extra full-resolution
+                    iterations after the pyramid. ``0`` disables them. Only
+                    hole pixels are painted.
+
+                    ``mask_feather`` (default ``0.0``): soft compose width in
+                    pixels from the hole boundary. Does not change the mask
+                    used for matching.
     :return: Inpainted image as uint8 array with shape (H, W, C)
     :rtype: numpy.ndarray
     """
+    if algorithm == "philippeau":
+        _reject_philippeau_keywords(options)
+        return _inpaint_philippeau(image, mask, patch_size, seed)
+    if algorithm != "patchmatch":
+        raise ValueError('algorithm must be "patchmatch" or "philippeau"')
+
+    taken = _patchmatch_options(options, _PYRAMID_OPTIONS)
+    solver_class = taken["solver_class"]
+    em_loops = taken["em_loops"]
+    edge_weighted = taken["edge_weighted"]
+    reverse_search = taken["reverse_search"]
+    poisson_blend = taken["poisson_blend"]
+    hole_refine = taken["hole_refine"]
+    mask_feather = taken["mask_feather"]
+
     _validate_quality_options(em_loops, hole_refine, mask_feather)
 
     if solver_class is None:
@@ -283,56 +388,61 @@ def inpaint_single(
         image: np.ndarray,
         mask: np.ndarray,
         patch_size: int = 5,
-        iterations: int = 5,
-        solver_class: typing.Optional[typing.Type[Solver]] = None,
         seed: typing.Optional[int] = None,
-        em_loops: int = 1,
-        edge_weighted: bool = False,
-        reverse_search: bool = False,
-        poisson_blend: bool = True,
-        hole_refine: int = 0,
-        mask_feather: float = 0.0,
+        algorithm: str = "patchmatch",
+        **options,
 ) -> np.ndarray:
     """
     Perform image inpainting using a single resolution level.
-    
+
     This function provides a straightforward single-scale inpainting approach
     that directly processes the image at its original resolution. This is simpler
     than the pyramid approach but may be slower for large images and potentially
     less effective for complex inpainting tasks.
-    
+
     Use this function when you need fine control over the number of iterations
     or when working with small images where the pyramid approach is not necessary.
-    
+
     :param image: Input image array with shape (H, W, C)
     :type image: numpy.ndarray
     :param mask: Binary mask indicating areas to inpaint with shape (H, W).
                  Accepts bool, ``{0,1}``, or ``{0,255}`` masks.
     :type mask: numpy.ndarray
-    :param patch_size: Size of square patches to use for matching
+    :param patch_size: Size of square patches to use for matching. With
+                       ``algorithm="philippeau"`` this is a patch radius.
     :type patch_size: int
-    :param iterations: Number of PatchMatch iterations to perform
-    :type iterations: int
-    :param solver_class: PatchMatch solver class to use. If None, defaults to
-                        :class:`CythonSolver` with fallback to :class:`PythonSolver`
-    :type solver_class: type or None
-    :param seed: Random seed for reproducible results
+    :param seed: Random seed for reproducible results. With
+                 ``algorithm="philippeau"``, omitting it draws a 32-bit seed.
     :type seed: int or None
-    :param em_loops: Outer match→vote→rematch loops. Default ``1`` keeps prior behavior.
-    :type em_loops: int
-    :param edge_weighted: Emphasize edge/structure channels in patch distance
-    :type edge_weighted: bool
-    :param reverse_search: Enable reverse/completeness search after each EM loop
-    :type reverse_search: bool
-    :param poisson_blend: Soften hole seams with a harmonic/guide cross-fade
-    :type poisson_blend: bool
-    :param hole_refine: Extra PatchMatch iterations after the main solve (0 disables)
-    :type hole_refine: int
-    :param mask_feather: Soft compose width in pixels from the hole boundary
-    :type mask_feather: float
+    :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
+    :type algorithm: str
+    :param options: Keyword-only options for ``algorithm="patchmatch"``.
+                    Passing any of them with ``algorithm="philippeau"`` raises
+                    :class:`UnsupportedOption`. Unknown names raise ``TypeError``.
+                    The pyramid keywords are documented on
+                    :func:`inpaint_pyramid`.
+
+                    ``iterations`` (default ``5``): PatchMatch passes at this
+                    scale.
     :return: Inpainted image as uint8 array with shape (H, W, C)
     :rtype: numpy.ndarray
     """
+    if algorithm == "philippeau":
+        _reject_philippeau_keywords(options)
+        return _inpaint_philippeau(image, mask, patch_size, seed)
+    if algorithm != "patchmatch":
+        raise ValueError('algorithm must be "patchmatch" or "philippeau"')
+
+    taken = _patchmatch_options(options, _SINGLE_OPTIONS)
+    iterations = taken["iterations"]
+    solver_class = taken["solver_class"]
+    em_loops = taken["em_loops"]
+    edge_weighted = taken["edge_weighted"]
+    reverse_search = taken["reverse_search"]
+    poisson_blend = taken["poisson_blend"]
+    hole_refine = taken["hole_refine"]
+    mask_feather = taken["mask_feather"]
+
     _validate_quality_options(em_loops, hole_refine, mask_feather)
 
     if solver_class is None:
