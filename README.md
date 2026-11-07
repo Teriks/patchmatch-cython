@@ -1,6 +1,6 @@
 # PatchMatch Cython
 
-High-performance PatchMatch implementation for pyramidical image inpainting in Cython. The default solver is the Barnes-style pyramid below. `algorithm="philippeau"` runs the Xavier Philippeau pyramid, also in Cython.
+High-performance PatchMatch implementation for pyramidical image inpainting in Cython. The default solver is the Barnes-style pyramid below. `algorithm="barnes"` is that same pyramid. `algorithm="philippeau"`, or `algorithm="phil"`, runs the Xavier Philippeau pyramid, also in Cython.
 
 This package can function without OpenCV (`opencv-python` / `opencv-python-headless`) with only slightly reduced quality and speed in a few helpers. When OpenCV is installed it is used for resize (`INTER_LINEAR` / `INTER_AREA`), morphology for valid/query centers, and distance transforms for seam feathering.
 
@@ -84,7 +84,7 @@ Image.fromarray(result).save("scratch.jpg")
 
 ### Lines, texture, and a soft rim
 
-These keywords apply to `algorithm="patchmatch"`. Passing any of them with `algorithm="philippeau"` raises `UnsupportedOption`, including when the value is the usual default. An unknown keyword raises `TypeError`.
+These keywords apply to `algorithm="patchmatch"` and `algorithm="barnes"`. Passing any of them with `algorithm="philippeau"` or `algorithm="phil"` raises `UnsupportedOption`, including when the value is the usual default. An unknown keyword raises `TypeError`.
 
 Turn on structure matching when the hole crosses an edge or a repeating texture. `edge_weighted` matches gradients as well as color. `reverse_search` pulls in source patches the first pass underused. `hole_refine` runs a few extra full-resolution passes on the hole only.
 
@@ -113,6 +113,7 @@ result = inpaint_pyramid(image, mask, patch_size=7, em_loops=2, seed=42)
 
 | Parameter | Default | Description |
 |---|---|---|
+| `algorithm` | `"patchmatch"` | `"patchmatch"` or `"barnes"` is the Barnes pyramid. `"philippeau"` or `"phil"` is the Philippeau pyramid. Any other name raises `ValueError`. |
 | `patch_size` | `5` | Odd positive int; square patch side for matching and voting. |
 | `seed` | `None` | RNG seed. `None` is 0. The same seed repeats the fill. |
 | `solver_class` | `None` | `None` uses `CythonSolver` when the extension is available, otherwise `PythonSolver`. |
@@ -129,7 +130,7 @@ Masks may be `bool`, `{0,1}`, or `{0,255}`. The library does not dilate or erode
 
 ### Xavier Philippeau
 
-`algorithm="philippeau"`, or `inpaint_philippeau`, runs Xavier Philippeau's pyramid: bidirectional nearest-neighbor fields, a texture-energy channel, split votes on the fine levels, and a short border blend. The implementation is Cython and does not use OpenCV. Known pixels stay exact. Passing a PatchMatch keyword (`solver_class`, `em_loops`, `edge_weighted`, `reverse_search`, `poisson_blend`, `hole_refine`, `mask_feather`, or `iterations`) raises `UnsupportedOption`.
+`algorithm="philippeau"`, `algorithm="phil"`, or `inpaint_philippeau`, runs Xavier Philippeau's pyramid: bidirectional nearest-neighbor fields, a texture-energy channel, split votes on the fine levels, and a short border blend. The implementation is Cython and does not use OpenCV. Known pixels stay exact. Passing a PatchMatch keyword (`solver_class`, `em_loops`, `edge_weighted`, `reverse_search`, `poisson_blend`, `hole_refine`, `mask_feather`, or `iterations`) raises `UnsupportedOption`.
 
 In this mode `patch_size` is a **radius**: each patch spans `2 * patch_size + 1` pixels. Any integer from 1 up is valid, including even values. A radius of 3 is a 7×7 patch. `inpaint_philippeau` defaults to radius 15. `inpaint_pyramid` and `inpaint_single` still default `patch_size` to 5, and that 5 is a radius here.
 
@@ -151,7 +152,7 @@ result = inpaint_philippeau(image, mask, patch_size=7, seed=42)
 Image.fromarray(result).save("filled.jpg")
 ```
 
-`inpaint_pyramid(..., algorithm="philippeau")` is the same fill when the image is already `uint8` and `patch_size` and `seed` match.
+`inpaint_pyramid(..., algorithm="philippeau")` is the same fill when the image is already `uint8` and `patch_size` and `seed` match. `algorithm="phil"` is the same call.
 
 ```python
 from patchmatch_cython import inpaint_pyramid

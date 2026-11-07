@@ -29,7 +29,7 @@
 
 import typing
 
-__version__: str = "1.0.2"
+__version__: str = "1.1.0"
 
 # Core algorithm imports (always available)
 from .exceptions import UnsupportedOption

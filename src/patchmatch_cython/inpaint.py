@@ -90,6 +90,21 @@ _PYRAMID_OPTIONS = {
     "mask_feather": 0.0,
 }
 _SINGLE_OPTIONS = {"iterations": 5, **_PYRAMID_OPTIONS}
+_ALGORITHM_ALIASES = {
+    "patchmatch": "patchmatch",
+    "barnes": "patchmatch",
+    "philippeau": "philippeau",
+    "phil": "philippeau",
+}
+
+
+def _canonical_algorithm(algorithm: str) -> str:
+    try:
+        return _ALGORITHM_ALIASES[algorithm]
+    except KeyError:
+        raise ValueError(
+            'algorithm must be "patchmatch", "barnes", "philippeau", or "phil"'
+        ) from None
 
 
 def _reject_philippeau_keywords(options: typing.Mapping[str, typing.Any]) -> None:
@@ -223,6 +238,7 @@ def inpaint_pyramid(
     :param seed: Random seed for reproducible results. ``None`` is 0.
     :type seed: int or None
     :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
+                      ``"barnes"`` is ``"patchmatch"``. ``"phil"`` is ``"philippeau"``.
     :type algorithm: str
     :param options: Keyword-only options for ``algorithm="patchmatch"``.
                     Passing any of them with ``algorithm="philippeau"`` raises
@@ -255,11 +271,10 @@ def inpaint_pyramid(
     :return: Inpainted image as uint8 array with shape (H, W, C)
     :rtype: numpy.ndarray
     """
+    algorithm = _canonical_algorithm(algorithm)
     if algorithm == "philippeau":
         _reject_philippeau_keywords(options)
         return _inpaint_philippeau(image, mask, patch_size, seed)
-    if algorithm != "patchmatch":
-        raise ValueError('algorithm must be "patchmatch" or "philippeau"')
 
     taken = _patchmatch_options(options, _PYRAMID_OPTIONS)
     solver_class = taken["solver_class"]
@@ -413,6 +428,7 @@ def inpaint_single(
     :param seed: Random seed for reproducible results. ``None`` is 0.
     :type seed: int or None
     :param algorithm: ``"patchmatch"`` (default) or ``"philippeau"``.
+                      ``"barnes"`` is ``"patchmatch"``. ``"phil"`` is ``"philippeau"``.
     :type algorithm: str
     :param options: Keyword-only options for ``algorithm="patchmatch"``.
                     Passing any of them with ``algorithm="philippeau"`` raises
@@ -425,11 +441,10 @@ def inpaint_single(
     :return: Inpainted image as uint8 array with shape (H, W, C)
     :rtype: numpy.ndarray
     """
+    algorithm = _canonical_algorithm(algorithm)
     if algorithm == "philippeau":
         _reject_philippeau_keywords(options)
         return _inpaint_philippeau(image, mask, patch_size, seed)
-    if algorithm != "patchmatch":
-        raise ValueError('algorithm must be "patchmatch" or "philippeau"')
 
     taken = _patchmatch_options(options, _SINGLE_OPTIONS)
     iterations = taken["iterations"]

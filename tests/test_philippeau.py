@@ -128,6 +128,16 @@ def test_philippeau_rejects_patchmatch_options():
         inpaint_pyramid(image, mask, not_an_option=1)
 
 
+def test_algorithm_aliases_match_the_canonical_names():
+    image, mask = _image_and_mask(24)
+    barnes = inpaint_pyramid(image, mask, patch_size=5, seed=2, algorithm="barnes")
+    patchmatch = inpaint_pyramid(image, mask, patch_size=5, seed=2, algorithm="patchmatch")
+    phil = inpaint_pyramid(image, mask, patch_size=2, seed=2, algorithm="phil")
+    philippeau = inpaint_pyramid(image, mask, patch_size=2, seed=2, algorithm="philippeau")
+    assert np.array_equal(barnes, patchmatch)
+    assert np.array_equal(phil, philippeau)
+
+
 def test_rejects_bad_patch_size_and_algorithm_name():
     image, mask = _image_and_mask(24)
     with pytest.raises(ValueError):
