@@ -130,7 +130,7 @@ Masks may be `bool`, `{0,1}`, or `{0,255}`. The library does not dilate or erode
 
 ### Xavier Philippeau
 
-`algorithm="philippeau"`, `algorithm="phil"`, or `inpaint_philippeau`, runs Xavier Philippeau's pyramid: bidirectional nearest-neighbor fields, a texture-energy channel, split votes on the fine levels, and a short border blend. The implementation is Cython and does not use OpenCV. Known pixels stay exact. Passing a PatchMatch keyword (`solver_class`, `em_loops`, `edge_weighted`, `reverse_search`, `poisson_blend`, `hole_refine`, `mask_feather`, or `iterations`) raises `UnsupportedOption`.
+`algorithm="philippeau"`, `algorithm="phil"`, or `inpaint_philippeau`, runs Xavier Philippeau's pyramid: bidirectional nearest-neighbor fields, a texture-energy channel, split votes on the fine levels, and a short border blend. The implementation is Cython and does not use OpenCV. Known pixels stay exact. The extension loads on the first Philippeau call. Importing the package still succeeds when it was not built; the call raises `ImportError`. Passing a PatchMatch keyword (`solver_class`, `em_loops`, `edge_weighted`, `reverse_search`, `poisson_blend`, `hole_refine`, `mask_feather`, or `iterations`) raises `UnsupportedOption`.
 
 In this mode `patch_size` is a **radius**: each patch spans `2 * patch_size + 1` pixels. Any integer from 1 up is valid, including even values. A radius of 3 is a 7×7 patch. `inpaint_philippeau` defaults to radius 15. `inpaint_pyramid` and `inpaint_single` still default `patch_size` to 5, and that 5 is a radius here.
 

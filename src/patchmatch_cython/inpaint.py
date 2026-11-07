@@ -47,6 +47,54 @@ from .exceptions import UnsupportedOption
 from .solver import Solver
 
 
+def _load_philippeau():
+    """Return the compiled Philippeau function, or raise if it was not built."""
+    try:
+        from .philippeau import inpaint_philippeau as compiled
+    except ImportError as exc:
+        raise ImportError(
+            "Philippeau is not built. Build the extension with "
+            "'python setup.py build_ext --inplace' or reinstall the package."
+        ) from exc
+    return compiled
+
+
+def inpaint_philippeau(
+        image,
+        mask=None,
+        *,
+        global_mask=None,
+        patch_size=15,
+        seed=0,
+        ijmap=None,
+        guide_weight=0.25,
+):
+    """Fill holes with the Xavier Philippeau algorithm.
+
+    ``image`` is an HxWx3 uint8 array. ``mask`` is HxW (or HxWx1) uint8 or
+    bool; non-zero marks a hole. If ``mask`` is omitted, pure white pixels are
+    the holes. ``global_mask`` marks pixels that are neither filled nor used as
+    a source. ``ijmap`` is an HxWx3 float32 regularity map (only the first two
+    channels are read) and ``guide_weight`` is its weight.
+
+    Only hole pixels change. A given ``seed`` is deterministic (taken modulo
+    ``2**32``). ``None`` is seed 0.
+
+    The compiled extension loads on the first call. If it was not built, this
+    raises ``ImportError``.
+    """
+    compiled = _load_philippeau()
+    return compiled(
+        image,
+        mask,
+        global_mask=global_mask,
+        patch_size=patch_size,
+        seed=seed,
+        ijmap=ijmap,
+        guide_weight=guide_weight,
+    )
+
+
 def _inpaint_philippeau(
         image: np.ndarray,
         mask: np.ndarray,
@@ -54,15 +102,14 @@ def _inpaint_philippeau(
         seed: typing.Optional[int],
 ) -> np.ndarray:
     """Philippeau entry used by the public inpaint functions."""
-    from .philippeau import inpaint_philippeau
-
+    compiled = _load_philippeau()
     image_arr = np.asarray(image)
     if image_arr.dtype != np.uint8:
         image_arr = to_uint8_image(image_arr)
     mask_arr = np.asarray(mask)
     if mask_arr.dtype != np.uint8 and mask_arr.dtype != np.bool_:
         mask_arr = (mask_arr != 0).astype(np.uint8)
-    return inpaint_philippeau(
+    return compiled(
         image_arr,
         mask_arr,
         patch_size=patch_size,

@@ -29,13 +29,12 @@
 
 import typing
 
-__version__: str = "1.1.0"
+__version__: str = "1.1.1"
 
-# Core algorithm imports (always available)
+# Core algorithm imports. The Philippeau extension loads on first use.
 from .exceptions import UnsupportedOption
 from .python_solver import PythonSolver
-from .inpaint import inpaint_pyramid, inpaint_single
-from .philippeau import inpaint_philippeau
+from .inpaint import inpaint_pyramid, inpaint_single, inpaint_philippeau
 
 # Try to import Cython-accelerated version
 try:

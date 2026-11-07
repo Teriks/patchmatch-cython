@@ -27,6 +27,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -126,6 +128,18 @@ def test_philippeau_rejects_patchmatch_options():
         )
     with pytest.raises(TypeError, match="not_an_option"):
         inpaint_pyramid(image, mask, not_an_option=1)
+
+
+def test_unbuilt_philippeau_raises_when_used(monkeypatch):
+    import patchmatch_cython
+
+    monkeypatch.setitem(sys.modules, "patchmatch_cython.philippeau", None)
+    image, mask = _image_and_mask(24)
+    with pytest.raises(ImportError, match="not built"):
+        inpaint_pyramid(image, mask, patch_size=2, seed=1, algorithm="phil")
+    with pytest.raises(ImportError, match="not built"):
+        inpaint_philippeau(image, mask, patch_size=2, seed=1)
+    assert patchmatch_cython.inpaint_pyramid is inpaint_pyramid
 
 
 def test_algorithm_aliases_match_the_canonical_names():
